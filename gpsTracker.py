@@ -136,13 +136,14 @@ class ReportHandler(multiprocessing.Process):
 		
 class UploadGPSData():
 	def __init__(self, config):
-		self.url = config['UPLOADER']['UPLOAD_URL'] + config['UPLOADER']['CLIENT_NAME']
+		self.url = config['UPLOADER']['UPLOAD_URL'] + config['UPLOADER']['GPSTRACKER_UPLOAD_API'] +config['UPLOADER']['CLIENT_NAME']
 		self.clientCert = config['UPLOADER']['CLIENT_CERT']
 		self.clientKey = config['UPLOADER']['CLIENT_KEY']
 		self.timeout = config['UPLOADER']['TIMEOUT']
 		
 	def upload(self, data):
-		if self.url[:5].lower() != 'https' or self.clientCert == '' or self.clientKey == '':
+		#TOCTOU in file existence check, but who cares?
+		if self.url[:5].lower() != 'https' or self.clientCert == '' or self.clientKey == '' or not os.path.isfile(self.clientCert) or not os.path.isfile(self.clientKey):
 			res = requests.post(
 					url=self.url,
                     data=data,
