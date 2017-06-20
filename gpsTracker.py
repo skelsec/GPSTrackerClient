@@ -155,7 +155,7 @@ class UploadGPSData():
                     data=data,
                     headers={'Content-Type': 'application/octet-stream'},
 					timeout=self.timeout,
-					cert=(self.clientCert, self.clientKey), verify=False)
+					cert=(self.clientCert, self.clientKey), verify=config['UPLOADER']['SSL_VERIFY'])
 			
 		if res.status_code != requests.codes.ok:
 			raise Exception("Server responsed with error! Code: %s" % (res.status_code,) )

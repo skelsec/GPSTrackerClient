@@ -1,6 +1,7 @@
 {
 	"UPLOADER": 
 	{
+		"SSL_VERIFY": true,
 		"GPSTRACKER_UPLOAD_API": "/gpstracker/upload/",
 		"CLIENT_NAME": "sample_client",
 		"UPLOAD_URL": "https://gps.company.ltd",
