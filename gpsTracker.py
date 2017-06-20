@@ -154,7 +154,7 @@ class UploadGPSData():
                     data=data,
                     headers={'Content-Type': 'application/octet-stream'},
 					timeout=self.timeout,
-					cert=(self.clientCert, self.clientKey))
+					cert=(self.clientCert, self.clientKey), verify=False)
 			
 		if res.status_code != requests.codes.ok:
 			raise Exception("Server responsed with error! Code: %s" % (res.status_code,) )
@@ -219,9 +219,9 @@ if __name__ == '__main__':
 		config['REPORTER']['FAILED_UPLOAD_DIR'] = args.f
 		config['REPORTER']['REUPLOADER_FREQ'] = args.r
 		config['UPLOADER']['UPLOAD_URL'] = args.upload_url
-		config['UPLOADER']['CLIENT_CERT'] = args.client-cert
-		config['UPLOADER']['CLIENT_KEY']  = args.client-key
-		config['UPLOADER']['TIMEOUT']     = args.t
+		config['UPLOADER']['CLIENT_CERT'] = args.client_cert
+		config['UPLOADER']['CLIENT_KEY']  = args.client_key
+		config['UPLOADER']['TIMEOUT']     = args.timeout
 	
 	
 	gpst = GPSTracker(config = config)

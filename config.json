@@ -1,18 +1,19 @@
 {
 	"UPLOADER": 
 	{
-		"CLIENT_NAME": "testgps",
-		"UPLOAD_URL": "http://192.168.4.70:8080/gpstracker/upload/", 
-		"CLIENT_CERT": "", 
+		"GPSTRACKER_UPLOAD_API": "/gpstracker/upload/",
+		"CLIENT_NAME": "sample_client",
+		"UPLOAD_URL": "https://gps.company.ltd",
+		"CLIENT_CERT": "./gpsClientCerts/sample_client.pem", 
 		"TIMEOUT": 20, 
-		"CLIENT_KEY": ""
+		"CLIENT_KEY": "./gpsClientCerts/sample_client.key"
 	}, 
 	"REPORTER": 
 	{
-		"FAILED_UPLOAD_DIR": "/root/gpsdata/failed", 
+		"FAILED_UPLOAD_DIR": "./gpsdata/failed", 
 		"REUPLOADER_FREQ": 15, 
-		"GPSDATA_DIR": "/root/gpsdata", 
-		"UPLOADER_FREQ": 10, 
-		"WRITE_GPSDATA_FILE": true
+		"GPSDATA_DIR": "./gpsdata", 
+		"UPLOADER_FREQ": 30, 
+		"WRITE_GPSDATA_FILE": false
 	}
 }
