@@ -10,6 +10,8 @@ import os
 import json
 import shutil
 
+import logging
+import logging.handlers
 
 import gps
 import requests
@@ -37,34 +39,67 @@ class GPSPoller(multiprocessing.Process):
 		self.logQueue.put((level, self.name, message))
 		
 	def run(self):
-		self.setup()
+		try:
+			self.setup()
+		except Exception as e:
+			self.log('EXCEPTION','Error when setting up GPS polling! Data: %s' % (e))
+			return
+			
+		self.log('DEBUG','Setup complete!')
+			
 		while True:
-			for gpsdata in self.gpsd:
-				self.reportQueue.put(json.dumps(gpsdata, cls=DictWrapperEncoder))
+			try:
+				for gpsdata in self.gpsd:
+					self.reportQueue.put(json.dumps(gpsdata, cls=DictWrapperEncoder))
+			except Exception as e:
+				self.log('EXCEPTION','Error when setting up GPS polling! Data: %s' % (e))
+				return
 				
+		self.log('DEBUG','Terminating!')
 
 class Logger(multiprocessing.Process):
 	def __init__(self, logQueue, config):
 		multiprocessing.Process.__init__(self)
 		self.logQueue = logQueue
 		self.config = config
+		self.logger = ''
 		
 	def setup(self):
-		return 1
+	
+		self.logger = logging.getLogger(self.config['LOGGER']['NAME'])
+		if 'LOGLEVEL' in self.config['LOGGER']:
+			if self.config['LOGGER']['LOGLEVEL'] == 'DEBUG':
+				self.logger.setLevel(logging.DEBUG)
+			elif self.config['LOGGER']['LOGLEVEL'] == 'INFO' or self.config['LOGGER']['LOGLEVEL'] == '':
+				self.logger.setLevel(logging.INFO)
+		else:
+			self.logger.setLevel(logging.INFO)
+
+		handler = logging.handlers.SysLogHandler(address = '/dev/log')
+
+		self.logger.addHandler(handler)
 		
 	def log(self, level, message):
 		self.logQueue.put((level, self.name, message))
 		
 	def run(self):
 		self.setup()
+		self.log('DEBUG','Setup complete!')
 		while True:
 			log = self.logQueue.get()
 			self.handleLog(log)
 			
 	def handleLog(self, log):
 		level, src, message = log
-		print '[%s][%s][%s] %s' % (datetime.utcnow(), level, src, message)
-		
+		#print '[%s][%s][%s] %s' % (datetime.utcnow(), level, src, message)
+		if level == 'DEBUG':
+			self.logger.debug([%s] %s' % (src, message))
+		elif level == 'INFO':
+			self.logger.info([%s] %s' % (src, message))
+		elif level == 'WARNING':
+			self.logger.warning([%s] %s' % (src, message))
+		elif level == 'EXCEPTION':
+			self.logger.critical([%s] %s' % (src, message))
 		
 class ReportHandler(multiprocessing.Process):
 	def __init__(self, reportQueue, logQueue, config):
@@ -85,7 +120,13 @@ class ReportHandler(multiprocessing.Process):
 		
 		
 	def run(self):
-		self.setup()
+		try:
+			self.setup()
+		except Exception as e:
+			self.log('EXCEPTION','Error when setting up Reporter! Data: %s' % (e))
+			return
+		
+		self.log('DEBUG','Setup complete!')
 		
 		while True:
 			gpsdata = self.reportQueue.get()
@@ -93,14 +134,26 @@ class ReportHandler(multiprocessing.Process):
 				self.gpsDataBuffer.append(gpsdata)
 	
 	def webSenderThread(self):
-		gzipdata = cStringIO.StringIO()
+		#### Rescheduling ourselves
+		threading.Timer(self.config['REPORTER']['UPLOADER_FREQ'], self.webSenderThread).start()
+		#### Checking if there is anything to send
 		with self.gpsDataBufferLock:
-			with gzip.GzipFile(fileobj=gzipdata, mode="wb") as f:
-				for gpsdata in self.gpsDataBuffer:
-					f.write(gpsdata + '\r\n')
-			
-			self.gpsDataBuffer = []
-			gzipdata.seek(0)
+			if len(self.gpsDataBuffer) == 0:
+				self.log('INFO','No GPS data to send! Is GPS configured right?')
+				return
+		#### Compressing raw GPS data with GZIP
+		try:
+			gzipdata = cStringIO.StringIO()
+			with self.gpsDataBufferLock:
+				with gzip.GzipFile(fileobj=gzipdata, mode="wb") as f:
+					for gpsdata in self.gpsDataBuffer:
+						f.write(gpsdata + '\r\n')
+				
+				self.gpsDataBuffer = []
+				gzipdata.seek(0)
+		except Exception as e:
+			self.log('EXCEPTION', "Failed to compress GPS data! Data: %s" % (str(e)))
+		#### Uploading compressed data
 		try:
 			uploader = UploadGPSData(self.config)
 			uploader.upload(gzipdata.getvalue())
@@ -109,26 +162,33 @@ class ReportHandler(multiprocessing.Process):
 			with open(os.path.join(self.config['REPORTER']['FAILED_UPLOAD_DIR'],'gpsdata_%s.gzip' % (datetime.utcnow().strftime("%Y%m%d-%H%M%S"))),'wb') as f:
 				gzipdata.seek(0)
 				shutil.copyfileobj(gzipdata,f)
-				
+		
+		#### Writing compressed data to disk when enabled
 		if self.config['REPORTER']['WRITE_GPSDATA_FILE']:
-			with open(os.path.join(self.config['REPORTER']['GPSDATA_DIR'],'gpsdata_%s.gzip' % (datetime.utcnow().strftime("%Y%m%d-%H%M%S"))),'wb') as f:
-				gzipdata.seek(0)
-				shutil.copyfileobj(gzipdata,f)
-				
-		threading.Timer(self.config['REPORTER']['UPLOADER_FREQ'], self.webSenderThread).start()
+			try:
+				with open(os.path.join(self.config['REPORTER']['GPSDATA_DIR'],'gpsdata_%s.gzip' % (datetime.utcnow().strftime("%Y%m%d-%H%M%S"))),'wb') as f:
+					gzipdata.seek(0)
+					shutil.copyfileobj(gzipdata,f)
+			except Exception as e:
+				self.log('EXCEPTION', "Failed to write GPS data to disk! Data: %s" % (str(e)))
+		
 			
 			
 	def reuploaderThread(self):
-		for filename in glob.glob(os.path.join(self.config['REPORTER']['FAILED_UPLOAD_DIR'], '*.gzip')):
-			with open(filename, 'rb') as f:
-				data = f.read()
-				try:
-					uploader = UploadGPSData(self.config)
-					uploader.upload(data)
-				except Exception as e:
-					break
-			
-			os.remove(filename)
+		try:
+			for filename in glob.glob(os.path.join(self.config['REPORTER']['FAILED_UPLOAD_DIR'], '*.gzip')):
+				with open(filename, 'rb') as f:
+					data = f.read()
+					try:
+						uploader = UploadGPSData(self.config)
+						uploader.upload(data)
+					except Exception as e:
+						self.log('INFO', "Failed to upload temporary GPS data! Data: %s" % (str(e)))
+						break
+				
+				os.remove(filename)
+		except Exception as e:
+			self.log('EXCEPTION', "Failed to read temporary GPS data! Data: %s" % (str(e)))
 			
 		threading.Timer(self.config['REPORTER']['REUPLOADER_FREQ'], self.reuploaderThread).start()
 			
@@ -223,7 +283,11 @@ if __name__ == '__main__':
 		config['UPLOADER']['CLIENT_CERT'] = args.client_cert
 		config['UPLOADER']['CLIENT_KEY']  = args.client_key
 		config['UPLOADER']['TIMEOUT']     = args.timeout
-	
+		config['LOGGER']['NAME'] = 'GPSTrackerLogger'
+		config['LOGGER']['LOGLEVEL'] = 'INFO'
+		if args.verbose:
+			config['LOGGER']['LOGLEVEL'] = 'DEBUG' 
+		
 	
 	gpst = GPSTracker(config = config)
 	gpst.run()
