@@ -93,13 +93,13 @@ class Logger(multiprocessing.Process):
 		level, src, message = log
 		#print '[%s][%s][%s] %s' % (datetime.utcnow(), level, src, message)
 		if level == 'DEBUG':
-			self.logger.debug([%s] %s' % (src, message))
+			self.logger.debug('[%s] %s' % (src, message))
 		elif level == 'INFO':
-			self.logger.info([%s] %s' % (src, message))
+			self.logger.info('[%s] %s' % (src, message))
 		elif level == 'WARNING':
-			self.logger.warning([%s] %s' % (src, message))
+			self.logger.warning('[%s] %s' % (src, message))
 		elif level == 'EXCEPTION':
-			self.logger.critical([%s] %s' % (src, message))
+			self.logger.critical('[%s] %s' % (src, message))
 		
 class ReportHandler(multiprocessing.Process):
 	def __init__(self, reportQueue, logQueue, config):
@@ -274,6 +274,7 @@ if __name__ == '__main__':
 		config = {}
 		config['REPORTER'] = {}
 		config['UPLOADER'] = {}
+		config['LOGGER'] = {}
 		config['REPORTER']['UPLOADER_FREQ'] = args.u
 		config['REPORTER']['GPSDATA_DIR']   = args.g
 		config['REPORTER']['WRITE_GPSDATA_FILE'] = args.w
