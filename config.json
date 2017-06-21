@@ -5,9 +5,9 @@
 		"GPSTRACKER_UPLOAD_API": "/gpstracker/upload/",
 		"CLIENT_NAME": "pi",
 		"UPLOAD_URL": "https://XXXX/",
-		"CLIENT_CERT": "/opt/GPSTrackerClient/gpsClientCerts/pi.pem", 
+		"CLIENT_CERT": "/opt/GPSTrackerClient/certs/pi.pem", 
 		"TIMEOUT": 20, 
-		"CLIENT_KEY": "/opt/GPSTrackerClient/gpsClientCerts/pi.key"
+		"CLIENT_KEY": "/opt/GPSTrackerClient/certs/pi.key"
 	}, 
 	"REPORTER": 
 	{
