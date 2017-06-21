@@ -17,7 +17,7 @@
 		"UPLOADER_FREQ": 30, 
 		"WRITE_GPSDATA_FILE": false
 	},
-	"LOGER":
+	"LOGGER":
 	{
 		"NAME": "GPSTrackerLogger",
 		"LOGLEVEL": "INFO"

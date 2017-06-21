@@ -15,7 +15,7 @@ import logging.handlers
 
 import gps
 import requests
-
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 class DictWrapperEncoder(json.JSONEncoder):
 	def default(self, obj):
@@ -112,6 +112,10 @@ class ReportHandler(multiprocessing.Process):
 		self.gpsDataBufferLock = threading.Lock()
 		
 	def setup(self):
+		if config['UPLOADER']['UPLOAD_URL'][:5] == 'https' and config['UPLOADER']['SSL_VERIFY'] == False:
+			self.log('WARNING','SSL certificate verification disabled! This is not recommended, please reconsider using a proper validation method!')
+			requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
 		threading.Timer(self.config['REPORTER']['UPLOADER_FREQ'], self.webSenderThread).start()
 		threading.Timer(self.config['REPORTER']['REUPLOADER_FREQ'], self.reuploaderThread).start()
 		
@@ -139,7 +143,7 @@ class ReportHandler(multiprocessing.Process):
 		#### Checking if there is anything to send
 		with self.gpsDataBufferLock:
 			if len(self.gpsDataBuffer) == 0:
-				self.log('INFO','No GPS data to send! Is GPS configured right?')
+				self.log('WARNING','No GPS data to send! Is GPS configured right?')
 				return
 		#### Compressing raw GPS data with GZIP
 		try:
@@ -155,13 +159,17 @@ class ReportHandler(multiprocessing.Process):
 			self.log('EXCEPTION', "Failed to compress GPS data! Data: %s" % (str(e)))
 		#### Uploading compressed data
 		try:
+			self.log('INFO','Uploading GPS data to server...')
 			uploader = UploadGPSData(self.config)
 			uploader.upload(gzipdata.getvalue())
 		except Exception as e:
 			self.log('EXCEPTION', "Error while uploading data to server! Error data: %s" % (str(e)))
-			with open(os.path.join(self.config['REPORTER']['FAILED_UPLOAD_DIR'],'gpsdata_%s.gzip' % (datetime.utcnow().strftime("%Y%m%d-%H%M%S"))),'wb') as f:
-				gzipdata.seek(0)
-				shutil.copyfileobj(gzipdata,f)
+			try:
+				with open(os.path.join(self.config['REPORTER']['FAILED_UPLOAD_DIR'],'gpsdata_%s.gzip' % (datetime.utcnow().strftime("%Y%m%d-%H%M%S"))),'wb') as f:
+					gzipdata.seek(0)
+					shutil.copyfileobj(gzipdata,f)
+			except Exception as e:
+				self.log('CRITICAL','Exception happened while saving GPS data to file system (which failed to upload to the server). Your GPS data is lost! Exception info: %s' % (e))
 		
 		#### Writing compressed data to disk when enabled
 		if self.config['REPORTER']['WRITE_GPSDATA_FILE']:
@@ -203,6 +211,7 @@ class UploadGPSData():
 		
 	def upload(self, data):
 		#TOCTOU in file existence check, but who cares?
+
 		if self.url[:5].lower() != 'https' or self.clientCert == '' or self.clientKey == '' or not os.path.isfile(self.clientCert) or not os.path.isfile(self.clientKey):
 			res = requests.post(
 					url=self.url,
@@ -226,9 +235,13 @@ class UploadGPSData():
 		
 class GPSTracker():
 	def __init__(self, config):
+		self.name = 'GPSTracker'
 		self.reportQueue = multiprocessing.Queue()
 		self.logQueue = multiprocessing.Queue()
 		self.config = config
+
+	def log(self, level, message):
+		self.logQueue.put((level, self.name, message))
 
 		
 	def setup(self):
@@ -246,6 +259,7 @@ class GPSTracker():
 	
 	def run(self):
 		self.setup()
+		self.log('INFO','GPSTracker started successfully!')
 		while True:
 			time.sleep(10)
 			
