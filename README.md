@@ -23,10 +23,18 @@ Constant network connectivity is preferred, but not necessary.
 	pip install requests
 	
 3. Clone this repo
-	a, git clone https://github.com/skelsec/GPSTrackerClient.git
+	a, cd /opt
+	b, git clone https://github.com/skelsec/GPSTrackerClient.git
 	
 4. Edit the config file
 	a, modify "UPLOAD_URL" to point to your server
-	
+	b, modify the startClient.sh script to point to your files (if not using it from /opt/)
+
 5. Start up the script for a test
 	a, python gpsTracker.py -c config.json
+	b, check syslog (tail -f /var/log/syslog) if the script tries to upload some data then it means it is working
+6. Edit crontab to start up your tracker client script on boot. This example will check if your script is still running eevery minute, and start it otherwise
+	a, crontab -e
+	b, in the editor add the following line (modify the path if needed) "* * * * * /usr/bin/flock -n /tmp/fcj.lockfile -c /opt/GPSTrackerClient/startClient.sh --minutely"
+		
+7. restart your raspberry and check in syslog if the script is uploading data.
