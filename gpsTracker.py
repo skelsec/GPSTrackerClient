@@ -205,8 +205,8 @@ class ReportHandler(multiprocessing.Process):
 class UploadGPSData():
 	def __init__(self, config):
 		self.url = config['UPLOADER']['UPLOAD_URL'] + config['UPLOADER']['GPSTRACKER_UPLOAD_API'] +config['UPLOADER']['CLIENT_NAME']
-		self.clientCert = config['UPLOADER']['CLIENT_CERT']
-		self.clientKey = config['UPLOADER']['CLIENT_KEY']
+		self.clientCert = config['UPLOADER']['TRACKER_CERT_FILE']
+		self.clientKey = config['UPLOADER']['TRACKER_KEY_FILE']
 		self.timeout = config['UPLOADER']['TIMEOUT']
 		
 	def upload(self, data):
@@ -295,8 +295,8 @@ class GPSTracker():
 		self.log('INFO', "Bootstrap completed!")
 	
 	def run(self):
-		self.clientCert = config['UPLOADER']['CLIENT_CERT']
-		self.clientKey = config['UPLOADER']['CLIENT_KEY']
+		self.clientCert = config['UPLOADER']['TRACKER_CERT_FILE']
+		self.clientKey = config['UPLOADER']['TRACKER_KEY_FILE']
 		
 		
 		if self.clientCert == '' or self.clientKey == '' or not os.path.isfile(self.clientCert) or not os.path.isfile(self.clientKey):
@@ -323,8 +323,8 @@ if __name__ == '__main__':
 	parser.add_argument("-f", help= 'Directory to store failed uploads', default = './failed/')
 	parser.add_argument("-r", type = int, help= 'Reupload  retry frequency', default = 60)
 	parser.add_argument("--upload-url",  help= 'GPSTracker web service URL', default = 'http://127.0.0.1/')
-	parser.add_argument("--client-cert", help= 'Client cert file for upload SSL auth', default = './certs/client.pem')
-	parser.add_argument("--client-key",  help= 'Client key file for upload SSL auth', default = './certs/client.key')
+	parser.add_argument("--tracker-cert", help= 'Client cert file for upload SSL auth', default = './certs/client.pem')
+	parser.add_argument("--tracker-key",  help= 'Client key file for upload SSL auth', default = './certs/client.key')
 	parser.add_argument("-t", "--timeout", type = int, help= 'Data file upload timeout', default = 10)
 	
 	args = parser.parse_args()
@@ -343,8 +343,8 @@ if __name__ == '__main__':
 		config['REPORTER']['FAILED_UPLOAD_DIR'] = args.f
 		config['REPORTER']['REUPLOADER_FREQ'] = args.r
 		config['UPLOADER']['UPLOAD_URL'] = args.upload_url
-		config['UPLOADER']['CLIENT_CERT'] = args.client_cert
-		config['UPLOADER']['CLIENT_KEY']  = args.client_key
+		config['UPLOADER']['TRACKER_CERT_FILE'] = args.tracker_cert
+		config['UPLOADER']['TRACKER_KEY_FILE']  = args.tracker_key
 		config['UPLOADER']['TIMEOUT']     = args.timeout
 		config['LOGGER']['NAME'] = 'GPSTrackerLogger'
 		config['LOGGER']['LOGLEVEL'] = 'INFO'
