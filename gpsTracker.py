@@ -268,7 +268,7 @@ class GPSTracker():
 				res = requests.put(
 							url=self.config['BOOTSTRAP']['BOOTSTRAP_URL'],
 							data=data,
-							headers={'Content-Type': ' application/json'},
+							headers={'Content-Type': 'application/json'},
 							timeout=10,
 							verify=self.config['UPLOADER']['SSL_VERIFY'])
 				
