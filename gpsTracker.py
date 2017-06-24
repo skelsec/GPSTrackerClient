@@ -286,10 +286,10 @@ class GPSTracker():
 		cert = rj['data']['cert']
 		key = rj['data']['key']
 		
-		with open(self.config['TRACKER_CERT_FILE'],'wb') as f:
+		with open(self.config['UPLOADER']['TRACKER_CERT_FILE'],'wb') as f:
 			f.write(cert)
 			
-		with open(self.config['TRACKER_KEY_FILE'],'wb') as f:
+		with open(self.config['UPLOADER']['TRACKER_KEY_FILE'],'wb') as f:
 			f.write(key)
 			
 		
