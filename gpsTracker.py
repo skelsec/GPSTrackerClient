@@ -300,7 +300,7 @@ class GPSTracker():
 		
 		
 		if self.clientCert == '' or self.clientKey == '' or not os.path.isfile(self.clientCert) or not os.path.isfile(self.clientKey):
-			if self.config['UPLOADER']['BOOTSTRAP_CODE'] != '' and self.config['UPLOADER']['BOOTSTRAP_EMAIL'] != '':
+			if self.config['BOOTSTRAP']['BOOTSTRAP_CODE'] != '' and self.config['BOOTSTRAP']['BOOTSTRAP_EMAIL'] != '':
 				self.bootstrap()
 			else:
 				self.log('CRITICAL','Missing client certificate and bootstrap data! Cant confinue, terminating!')
