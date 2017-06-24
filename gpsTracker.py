@@ -233,16 +233,16 @@ class UploadGPSData():
 		
 		
 		
+		
+		
 class GPSTracker():
 	def __init__(self, config):
-		self.name = 'GPSTracker'
 		self.reportQueue = multiprocessing.Queue()
 		self.logQueue = multiprocessing.Queue()
 		self.config = config
 
 	def log(self, level, message):
 		self.logQueue.put((level, self.name, message))
-
 		
 	def setup(self):
 		self.logger = Logger(self.logQueue, self.config)
@@ -257,11 +257,59 @@ class GPSTracker():
 		self.reporter.daemon = True
 		self.reporter.start()
 	
+	def bootstrap(self):
+		data = json.dumps({'bootstrap_code': self.config['BOOTSTRAP']['BOOTSTRAP_CODE'], 'email': self.config['BOOTSTRAP']['BOOTSTRAP_EMAIL']})
+		
+		res = ''
+		while True:
+			self.log('DEBUG', "Trying to bootstrap tracker")
+			try:
+				res = requests.put(
+							url=self.config['BOOTSTRAP']['BOOTSTRAP_URL'],
+							data=data,
+							headers={'Content-Type': ' application/json'},
+							timeout=10,
+							verify=self.config['UPLOADER']['SSL_VERIFY'])
+				
+				if res.status_code != requests.codes.ok:
+					raise Exception("Server responsed with error! Code: %s" % (res.status_code,) )
+				
+				break
+							
+			except Exception as e:
+				print "Failed to bootstrap tracker! Error: " + str(e)
+				time.sleep(5)
+				continue
+				
+		rj = json.loads(res.text)
+		cert = rj['data']['cert']
+		key = rj['data']['key']
+		
+		with open(self.config['TRACKER_CERT_FILE'],'wb') as f:
+			f.write(cert)
+			
+		with open(self.config['TRACKER_KEY_FILE'],'wb') as f:
+			f.write(key)
+			
+		
+		self.log('INFO', "Bootstrap completed!")
+	
 	def run(self):
+		self.clientCert = config['UPLOADER']['CLIENT_CERT']
+		self.clientKey = config['UPLOADER']['CLIENT_KEY']
+		
+		
+		if self.clientCert == '' or self.clientKey == '' or not os.path.isfile(self.clientCert) or not os.path.isfile(self.clientKey):
+			if self.config['UPLOADER']['BOOTSTRAP_CODE'] != '' and self.config['UPLOADER']['BOOTSTRAP_EMAIL'] != '':
+				self.bootstrap()
+			else:
+				self.log('CRITICAL','Missing client certificate and bootstrap data! Cant confinue, terminating!')
+				return
+		
 		self.setup()
-		self.log('INFO','GPSTracker started successfully!')
 		while True:
 			time.sleep(10)
+
 			
 			
 if __name__ == '__main__':
