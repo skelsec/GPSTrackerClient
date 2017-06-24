@@ -204,7 +204,7 @@ class ReportHandler(multiprocessing.Process):
 		
 class UploadGPSData():
 	def __init__(self, config):
-		self.url = config['UPLOADER']['UPLOAD_URL'] + config['UPLOADER']['GPSTRACKER_UPLOAD_API'] +config['UPLOADER']['CLIENT_NAME']
+		self.url = config['UPLOADER']['UPLOAD_URL'] + config['UPLOADER']['GPSTRACKER_UPLOAD_API']
 		self.clientCert = config['UPLOADER']['TRACKER_CERT_FILE']
 		self.clientKey = config['UPLOADER']['TRACKER_KEY_FILE']
 		self.timeout = config['UPLOADER']['TIMEOUT']
