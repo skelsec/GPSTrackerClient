@@ -240,6 +240,7 @@ class GPSTracker():
 		self.reportQueue = multiprocessing.Queue()
 		self.logQueue = multiprocessing.Queue()
 		self.config = config
+		self.name = 'GPSTracker'
 
 	def log(self, level, message):
 		self.logQueue.put((level, self.name, message))
