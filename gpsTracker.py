@@ -26,47 +26,17 @@ class DictWrapperEncoder(json.JSONEncoder):
 		return json.JSONEncoder.default(self.obj)
 
 class GPSPoller(multiprocessing.Process):
-	def __init__(self, reportQueue, logQueue, config):
+	def __init__(self, reportQueue, logQueue, config, GPSDataReadCtr):
 		multiprocessing.Process.__init__(self)
 		self.reportQueue = reportQueue
 		self.logQueue = logQueue
 		self.gpsd = ''
-		self.gpsDataElementRead = 0
-		self.gpsDataElementRead_n_1 = 0
-		self.watchdogThreadStarted = False
-		self.restartGPSD = threading.Event()
-
-		self.gpsDataReadThreadHandle = ''
+		self.GPSDataReadCtr = GPSDataReadCtr
 
 	def setup(self):
-		if not self.watchdogThreadStarted:
-			threading.Timer(10, self.watchdogThread).start()
-			self.watchdogThreadStarted = True
-
 		self.gpsd = gps.gps()
 		self.gpsd.stream(gps.WATCH_ENABLE|gps.WATCH_NEWSTYLE)
-
-
-	def watchdogThread(self):
-		threading.Timer(10, self.watchdogThread).start()
-		if self.gpsDataElementRead > self.gpsDataElementRead_n_1:
-			self.gpsDataElementRead_n_1 = self.gpsDataElementRead
-			return
-
-		self.log('INFO','GPSD thread doesnt read anything! Needs to be restarted!')
-
-		self.restartGPSD.set()
-
-
-	def gpsDataReadThread(self):
-		while True:
-			try:
-				for gpsdata in self.gpsd:
-					self.reportQueue.put(json.dumps(gpsdata, cls=DictWrapperEncoder))
-					self.gpsDataElementRead += 1
-			except Exception as e:
-				self.log('INFO','Error when setting up GPS polling! Data: %s' % (e))
-				break
+		
 
 
 	def log(self, level, message):
@@ -74,31 +44,23 @@ class GPSPoller(multiprocessing.Process):
 		
 	def run(self):
 		try:
-			while True:
-				try:
-					self.log('INFO','Trying to setup GPSD communication')
-					self.setup()
-					break
-				except Exception as e:
-					self.log('INFO','Error when setting up GPS polling! Data: %s' % (e))
-					time.sleep(10)
-					continue
+			try:
+				self.log('INFO','Trying to setup GPSD communication')
+				self.setup()
+			except Exception as e:
+				self.log('INFO','Error when setting up GPS polling! Data: %s' % (e))
 
 			self.log('DEBUG','Setup complete!')
-
-			self.log('INFO','Starting GPSD read thread!')
-
-			self.gpsDataReadThreadHandle = threading.Thread(target=self.gpsDataReadThread)
-			self.gpsDataReadThreadHandle.daemon = True
-			self.gpsDataReadThreadHandle.start()
-
+			
 			while True:
-				self.restartGPSD.wait()
-				self.log('INFO','Restarting GPSD read thread!')
-				self.gpsDataReadThreadHandle = threading.Thread(target=self.gpsDataReadThread)
-				self.gpsDataReadThreadHandle.daemon = True
-				self.gpsDataReadThreadHandle.start()
-				self.restartGPSD.clear()
+				try:
+					for gpsdata in self.gpsd:
+						self.reportQueue.put(json.dumps(gpsdata, cls=DictWrapperEncoder))
+						self.GPSDataReadCtr.value += 1
+				except Exception as e:
+					self.log('INFO','Error when setting up GPS polling! Data: %s' % (e))
+					break
+
 
 		except Exception as e:
 			self.log('INFO','Strange error! %s' % (e))
@@ -290,6 +252,8 @@ class GPSTracker():
 		self.logQueue = multiprocessing.Queue()
 		self.config = config
 		self.name = 'GPSTracker'
+		self.GPSDataReadCtr = multiprocessing.Value("i", 0)
+		self.GPSDataReadCurrentValue = 0
 
 	def log(self, level, message):
 		self.logQueue.put((level, self.name, message))
@@ -299,13 +263,24 @@ class GPSTracker():
 		self.logger.daemon = True
 		self.logger.start()
 		
-		self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config)
+		self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config, GPSDataReadCtr)
 		self.poller.daemon = True
 		self.poller.start()
 		
 		self.reporter = ReportHandler(self.reportQueue, self.logQueue, self.config)
 		self.reporter.daemon = True
 		self.reporter.start()
+		
+		
+	def watchdogThread(self):
+		threading.Timer(10, self.watchdogThread).start()
+		if self.gpsDataElementRead > self.gpsDataElementRead_n_1:
+			self.gpsDataElementRead_n_1 = self.gpsDataElementRead
+			return
+
+		self.log('INFO','GPSD thread doesnt read anything! Needs to be restarted!')
+
+		self.restartGPSD.set()
 	
 	def bootstrap(self):
 		data = json.dumps({'bootstrap_code': self.config['BOOTSTRAP']['BOOTSTRAP_CODE'], 'email': self.config['BOOTSTRAP']['BOOTSTRAP_EMAIL']})
@@ -358,7 +333,18 @@ class GPSTracker():
 		
 		self.setup()
 		while True:
+			if self.GPSDataReadCtr.value >	self.GPSDataReadCurrentValue:
+				self.GPSDataReadCurrentValue = self.GPSDataReadCtr.value
+				
+			else:
+				self.log('INFO', "GPS data read stalled! Restarting process!")
+				self.poller.terminate()
+				self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config, GPSDataReadCtr)
+				self.poller.daemon = True
+				self.poller.start()
+			
 			time.sleep(10)
+			
 
 			
 			
