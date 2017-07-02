@@ -7,6 +7,7 @@ import gzip
 from datetime import datetime
 import glob
 import os
+import sys
 import json
 import shutil
 
@@ -30,31 +31,78 @@ class GPSPoller(multiprocessing.Process):
 		self.reportQueue = reportQueue
 		self.logQueue = logQueue
 		self.gpsd = ''
-		
+		self.gpsDataElementRead = 0
+		self.gpsDataElementRead_n_1 = 0
+		self.watchdogThreadStarted = False
+		self.restartGPSD = threading.Event()
+
+		self.gpsDataReadThreadHandle = ''
+
 	def setup(self):
+		if not self.watchdogThreadStarted:
+			threading.Timer(10, self.watchdogThread).start()
+			self.watchdogThreadStarted = True
+
 		self.gpsd = gps.gps()
 		self.gpsd.stream(gps.WATCH_ENABLE|gps.WATCH_NEWSTYLE)
+
+
+	def watchdogThread(self):
+		threading.Timer(10, self.watchdogThread).start()
+		if self.gpsDataElementRead > self.gpsDataElementRead_n_1:
+			self.gpsDataElementRead_n_1 = self.gpsDataElementRead
+			return
+
+		self.log('INFO','GPSD thread doesnt read anything! Needs to be restarted!')
+
+		self.restartGPSD.set()
+
+
+	def gpsDataReadThread(self):
+		while True:
+			try:
+				for gpsdata in self.gpsd:
+					self.reportQueue.put(json.dumps(gpsdata, cls=DictWrapperEncoder))
+					self.gpsDataElementRead += 1
+			except Exception as e:
+				self.log('INFO','Error when setting up GPS polling! Data: %s' % (e))
+				break
+
 
 	def log(self, level, message):
 		self.logQueue.put((level, self.name, message))
 		
 	def run(self):
 		try:
-			self.setup()
+			while True:
+				try:
+					self.log('INFO','Trying to setup GPSD communication')
+					self.setup()
+					break
+				except Exception as e:
+					self.log('INFO','Error when setting up GPS polling! Data: %s' % (e))
+					time.sleep(10)
+					continue
+
+			self.log('DEBUG','Setup complete!')
+
+			self.log('INFO','Starting GPSD read thread!')
+
+			self.gpsDataReadThreadHandle = threading.Thread(target=self.gpsDataReadThread)
+			self.gpsDataReadThreadHandle.daemon = True
+			self.gpsDataReadThreadHandle.start()
+
+			while True:
+				self.restartGPSD.wait()
+				self.log('INFO','Restarting GPSD read thread!')
+				self.gpsDataReadThreadHandle = threading.Thread(target=self.gpsDataReadThread)
+				self.gpsDataReadThreadHandle.daemon = True
+				self.gpsDataReadThreadHandle.start()
+				self.restartGPSD.clear()
+
 		except Exception as e:
-			self.log('EXCEPTION','Error when setting up GPS polling! Data: %s' % (e))
-			return
-			
-		self.log('DEBUG','Setup complete!')
-			
-		while True:
-			try:
-				for gpsdata in self.gpsd:
-					self.reportQueue.put(json.dumps(gpsdata, cls=DictWrapperEncoder))
-			except Exception as e:
-				self.log('EXCEPTION','Error when setting up GPS polling! Data: %s' % (e))
-				return
-				
+			self.log('INFO','Strange error! %s' % (e))
+
 		self.log('DEBUG','Terminating!')
 
 class Logger(multiprocessing.Process):
@@ -76,7 +124,8 @@ class Logger(multiprocessing.Process):
 			self.logger.setLevel(logging.INFO)
 
 		handler = logging.handlers.SysLogHandler(address = '/dev/log')
-
+		formatter = logging.Formatter('%(asctime)s [GPSTrackerClient] %(message)s', datefmt='%b %d %H:%M:%S')
+		handler.setFormatter(formatter)
 		self.logger.addHandler(handler)
 		
 	def log(self, level, message):
@@ -99,7 +148,7 @@ class Logger(multiprocessing.Process):
 		elif level == 'WARNING':
 			self.logger.warning('[%s] %s' % (src, message))
 		elif level == 'EXCEPTION':
-			self.logger.critical('[%s] %s' % (src, message))
+			self.logger.warning('[%s] %s' % (src, message))
 		
 class ReportHandler(multiprocessing.Process):
 	def __init__(self, reportQueue, logQueue, config):
@@ -314,6 +363,9 @@ class GPSTracker():
 			
 			
 if __name__ == '__main__':
+	#changing the working directory to our scripts directory wherever we started the script from.
+	os.chdir(sys.path[0])
+
 	import argparse
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-v", "--verbose", help="Increase output verbosity", action="store_true")
@@ -332,6 +384,7 @@ if __name__ == '__main__':
 	if args.config != '':
 		with open(args.config, 'rb') as f:
 			config = json.loads(f.read())
+
 	
 	else:
 		config = {}
