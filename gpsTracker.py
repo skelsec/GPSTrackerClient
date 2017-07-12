@@ -10,6 +10,8 @@ import os
 import sys
 import json
 import shutil
+import subprocess
+import shlex
 
 import logging
 import logging.handlers
@@ -201,11 +203,17 @@ class ReportHandler(multiprocessing.Process):
 					try:
 						uploader = UploadGPSData(self.config)
 						uploader.upload(data)
+						try:
+							os.remove(filename)
+						except Exception as e:
+							self.log('INFO', "Failed to remove gps data file after succsessful upload" % (str(e)))
+							break
+					
 					except Exception as e:
 						self.log('INFO', "Failed to upload temporary GPS data! Data: %s" % (str(e)))
 						break
 				
-				os.remove(filename)
+				
 		except Exception as e:
 			self.log('EXCEPTION', "Failed to read temporary GPS data! Data: %s" % (str(e)))
 			
@@ -254,6 +262,7 @@ class GPSTracker():
 		self.name = 'GPSTracker'
 		self.GPSDataReadCtr = multiprocessing.Value("i", 0)
 		self.GPSDataReadCurrentValue = 0
+		self.GPSDrestartCMD = 'service gpsd restart'
 
 	def log(self, level, message):
 		self.logQueue.put((level, self.name, message))
@@ -318,6 +327,12 @@ class GPSTracker():
 			
 		
 		self.log('INFO', "Bootstrap completed!")
+		
+	def restart_gpsd(self):
+		self.log('INFO','Restarting GPSD...')
+		proc = subprocess.Popen(shlex.split(self.GPSDrestartCMD))
+		proc.wait()
+		return
 	
 	def run(self):
 		self.clientCert = config['UPLOADER']['TRACKER_CERT_FILE']
@@ -338,6 +353,7 @@ class GPSTracker():
 				
 			else:
 				self.log('INFO', "GPS data read stalled! Restarting process!")
+				self.restart_gpsd()
 				self.poller.terminate()
 				self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config, GPSDataReadCtr)
 				self.poller.daemon = True
