@@ -272,7 +272,7 @@ class GPSTracker():
 		self.logger.daemon = True
 		self.logger.start()
 		
-		self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config, GPSDataReadCtr)
+		self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config, self.GPSDataReadCtr)
 		self.poller.daemon = True
 		self.poller.start()
 		
@@ -330,8 +330,15 @@ class GPSTracker():
 		
 	def restart_gpsd(self):
 		self.log('INFO','Restarting GPSD...')
-		proc = subprocess.Popen(shlex.split(self.GPSDrestartCMD))
-		proc.wait()
+		try:
+			eStatus = subprocess.call(shlex.split(self.GPSDrestartCMD))
+			#give a little time for the service to actually start up
+			time.sleep(1)
+
+		except Exception as e:
+			self.log('EXCEPTION', "Failed to restart GPSD, err: %s" % (e) )
+		
+
 		return
 	
 	def run(self):
@@ -355,7 +362,7 @@ class GPSTracker():
 				self.log('INFO', "GPS data read stalled! Restarting process!")
 				self.restart_gpsd()
 				self.poller.terminate()
-				self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config, GPSDataReadCtr)
+				self.poller = GPSPoller(self.reportQueue, self.logQueue, self.config, self.GPSDataReadCtr)
 				self.poller.daemon = True
 				self.poller.start()
 			
