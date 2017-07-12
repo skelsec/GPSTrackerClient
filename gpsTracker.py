@@ -262,7 +262,8 @@ class GPSTracker():
 		self.name = 'GPSTracker'
 		self.GPSDataReadCtr = multiprocessing.Value("i", 0)
 		self.GPSDataReadCurrentValue = 0
-		self.GPSDrestartCMD = 'service gpsd restart'
+		#self.GPSDrestartCMD = 'service gpsd restart'
+		self.GPSDrestartCMD = '/etc/init.d/gpsd restart'
 
 	def log(self, level, message):
 		self.logQueue.put((level, self.name, message))
@@ -331,7 +332,8 @@ class GPSTracker():
 	def restart_gpsd(self):
 		self.log('INFO','Restarting GPSD...')
 		try:
-			eStatus = subprocess.call(shlex.split(self.GPSDrestartCMD))
+			#eStatus = subprocess.call(self.GPSDrestartCMD, shell=True)
+			os.system(self.GPSDrestartCMD)
 			#give a little time for the service to actually start up
 			time.sleep(1)
 
